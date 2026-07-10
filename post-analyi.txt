@@ -1,0 +1,20 @@
+Critical
+1. Optimistic concurrency — No row versioning anywhere; lost updates on inventory/loans/members
+2. Zero indexes — Only 2 explicit indexes across all 6 databases; FK columns, Email, Status all unindexed
+3. Blocking async call — Autheo.UserRepository.Update() calls .GetAwaiter().GetResult() on the thread pool
+4. SELECT * everywhere — Every GetById in communities, soup-kitchen, and some tool-lib queries
+High Impact
+5. 3 cross-aggregate transaction violations in tool-lib (RegisterTool, LoanTool, ReserveTool) — update >1 aggregate per tx
+6. Domain events mostly dead — 5 of 14 tool-lib events never raised; 4 handlers are empty stubs; other 5 contexts have zero events
+7. Weak contexts need domain modeling — Identity (fully anemic), Support (flat DTOs, no Ticket aggregate), Soup Kitchen (public constructors, no validation)
+8. Hard deletes everywhere — No audit trail on any table
+9. No pagination — Every list endpoint is unbounded (only Support has LIMIT 50)
+Medium
+10. String-concatenated SQL in Soup Kitchen query handlers
+11. Identity schema mismatch — user_profiles.Id is VARCHAR(128) vs autheo's UUID; dead AspNetUsers tables
+12. Separate DB connections for reads — bypassing UoW, wasting TCP handshakes
+13. Policy aggregate orphaned — never loaded or enforced by any handler
+14. Member.Reinstate() allows Banned→Active (contradicts stated invariant)
+15. No CI/CD — zero GitHub Actions across all repos
+16. No tests outside tool-lib (12 unit tests total)
+17. No structured logging / distributed tracing
