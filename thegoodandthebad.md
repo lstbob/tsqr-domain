@@ -50,6 +50,8 @@
 
 ### 1. Aggregate Boundary Violations
 
+> **GitHub Issues:** [tsqr-tool-lib#30](https://github.com/lstbob/tsqr-tool-lib/issues/30) (epic), [tsqr-tool-lib#33](https://github.com/lstbob/tsqr-tool-lib/issues/33)
+
 **Cross-aggregate transactions in Tool Library.** Three command handlers update multiple aggregates in a single database transaction:
 
 | Handler | Aggregates Mutated | Problem |
@@ -64,6 +66,8 @@ In proper DDD, a transaction should span exactly one aggregate. The side effect 
 
 ### 2. Domain Events: Defined but Dead
 
+> **GitHub Issues:** [tsqr-tool-lib#30](https://github.com/lstbob/tsqr-tool-lib/issues/30) (epic), [tsqr-tool-lib#34](https://github.com/lstbob/tsqr-tool-lib/issues/34)
+
 **Tool Library** defines 14 domain events but the wiring is incomplete:
 - `PickupReminderEvent`, `ReturnReminderEvent`, `ToolReservedEvent` — defined in the domain layer as record types, **never raised** by any aggregate behavior.
 - Four event handlers are empty stubs that return `Task.CompletedTask`:
@@ -75,6 +79,8 @@ In proper DDD, a transaction should span exactly one aggregate. The side effect 
 **Every other bounded context has zero domain events.** Communities, Soup Kitchen, Identity, and Support all inherit the `Entity` base class which has a `DomainEvents` collection, but no aggregate in those contexts ever calls `AddDomainEvent()`. The infrastructure for dispatching events doesn't exist outside of tool-lib.
 
 ### 3. Inconsistent Error Handling Strategy
+
+> **GitHub Issue:** [tsqr-autheo#1](https://github.com/lstbob/tsqr-autheo/issues/1)
 
 Three different error patterns coexist across the codebase:
 
@@ -89,6 +95,8 @@ Autheo's mixed approach is the most dangerous: domain methods throw exceptions w
 
 ### 4. Debug Leak in Production Code
 
+> **GitHub Issue:** [tsqr-tool-lib#31](https://github.com/lstbob/tsqr-tool-lib/issues/31)
+
 In `Entity.cs:56-59` (tool-lib domain base class, inherited by every aggregate):
 
 ```csharp
@@ -102,6 +110,8 @@ A misspelled test method (`TestAsnc` instead of `TestAsync`) that returns the in
 
 ### 5. The Not-Aggregate Roots
 
+> **GitHub Issues:** [tsqr-tool-lib#31](https://github.com/lstbob/tsqr-tool-lib/issues/31) (Manufacturer), [tsqr-soup-kitchen#5](https://github.com/lstbob/tsqr-soup-kitchen/issues/5) (Meal/Guest/Volunteer/Donation)
+
 Several classes marked `IAggregateRoot` should not have that status:
 
 - **`Country`, `City`, `Neighbourhood`** (tsqr-communities) — these are reference/lookup data. They are created once and rarely mutated. Making each an independent aggregate root forces the `QuickRegisterCommunityCommand` to commit after each creation (see issue #6). They should be value objects or a single `Location` aggregate.
@@ -111,6 +121,8 @@ Several classes marked `IAggregateRoot` should not have that status:
 - **`Meal`, `Guest`, `Volunteer`, `Donation`** (tsqr-soup-kitchen) — these reference an `Event` by `EventId` but are independent aggregate roots. A `Meal` has no existence without an `Event`, so it should arguably be a child of `Event`. The current design makes it possible to create meals that belong to non-existent events.
 
 ### 6. Communities: Broken Transactional Boundary in QuickRegister
+
+> **GitHub Issues:** [tsqr-communities#1](https://github.com/lstbob/tsqr-communities/issues/1) (epic), [tsqr-communities#4](https://github.com/lstbob/tsqr-communities/issues/4)
 
 `QuickRegisterCommunityCommand.cs` calls `SaveChangesAsync()` after each individual entity creation:
 
@@ -126,6 +138,8 @@ Because all four repositories share the same scoped `DapperUnitOfWork`, the firs
 The entire operation should be wrapped in a single transaction with a single commit at the end.
 
 ### 7. Soup Kitchen: Public Constructors, Zero Validation
+
+> **GitHub Issues:** [tsqr-soup-kitchen#1](https://github.com/lstbob/tsqr-soup-kitchen/issues/1) (epic), [tsqr-soup-kitchen#4](https://github.com/lstbob/tsqr-soup-kitchen/issues/4)
 
 All Soup Kitchen aggregates use **public constructors** with no validation:
 
@@ -146,6 +160,8 @@ public Event(string name, string description, DateTime eventDate, string locatio
 `Guest`, `Meal`, `Volunteer`, and `Donation` have the same issue — public constructors, no validation, no null checks, no date-range checks. This is an anemic domain model where the domain layer provides zero protection against invalid state.
 
 ### 8. Identity: Completely Anemic Domain
+
+> **GitHub Issues:** [tsqr-identity#1](https://github.com/lstbob/tsqr-identity/issues/1) (epic), [tsqr-identity#3](https://github.com/lstbob/tsqr-identity/issues/3) (UserProfile), [tsqr-identity#4](https://github.com/lstbob/tsqr-identity/issues/4) (Role)
 
 `UserProfile` is a plain data class with public get/set properties:
 
@@ -169,11 +185,15 @@ No encapsulation, no domain behavior, no invariants. The domain layer (`TSQR.Ide
 
 ### 9. Reservation Queue Ignores Its Own Domain Service
 
+> **GitHub Issue:** [tsqr-tool-lib#34](https://github.com/lstbob/tsqr-tool-lib/issues/34)
+
 `ReservationQueueService.ShiftQueueAfterCancellation()` exists in the domain layer but is **never called** by any application handler. When a reservation is cancelled via `ReservationCancelledEventHandler`, the next-in-line is notified but the `QueuePosition` values are never renumbered — leaving gaps (1, 3, 4 instead of 1, 2, 3).
 
 The domain service was created to handle this, but the wiring was never completed.
 
 ### 10. Slug Generation is Naive
+
+> **GitHub Issues:** [tsqr-tool-lib#31](https://github.com/lstbob/tsqr-tool-lib/issues/31), [tsqr-communities#2](https://github.com/lstbob/tsqr-communities/issues/2)
 
 `Community.cs:41-42`:
 
@@ -191,6 +211,8 @@ This implementation fails on:
 
 ### 11. Hardcoded Fine Rate Despite Having a Policy Aggregate
 
+> **GitHub Issue:** [tsqr-tool-lib#35](https://github.com/lstbob/tsqr-tool-lib/issues/35)
+
 `Loan.cs:121-125`:
 
 ```csharp
@@ -205,6 +227,8 @@ The `FineService` exists specifically to provide configurable fine rates (`FineS
 
 ### 12. Policy Entity Is Orphaned
 
+> **GitHub Issue:** [tsqr-tool-lib#35](https://github.com/lstbob/tsqr-tool-lib/issues/35)
+
 `Policy` (in the `ToolAggregate` namespace) defines lending rules:
 - `LateFeePerDay` — not used by `Loan.EndLoan()` (see issue #11)
 - `MaxLoanDurationDays` — not checked by `LoanToolCommandHandler`
@@ -214,6 +238,8 @@ The `FineService` exists specifically to provide configurable fine rates (`FineS
 The `Policy` entity and its repository `IManufacturerRepository` (note: misnamed — should be `IPolicyRepository`) exist in the domain model but no application handler ever loads or enforces a policy.
 
 ### 13. Supported but Not Banned: Reinstate Allows Banned → Active
+
+> **GitHub Issue:** [tsqr-tool-lib#31](https://github.com/lstbob/tsqr-tool-lib/issues/31)
 
 `Member.Reinstate()` in `Member.cs:213-219`:
 
@@ -231,6 +257,8 @@ public Result Reinstate()
 
 ### 14. Support Context Has No Domain Model
 
+> **GitHub Issues:** [tsqr-support#1](https://github.com/lstbob/tsqr-support/issues/1) (epic), [tsqr-support#3](https://github.com/lstbob/tsqr-support/issues/3) (Ticket), [tsqr-support#4](https://github.com/lstbob/tsqr-support/issues/4) (Incident)
+
 The Support context lacks any domain aggregates:
 - `ITicketsRepository` takes primitive parameters: `CreateTicketAsync(string subject, int category, string description, ...)`
 - `ISupportQueries` returns flat DTO records (`TicketListItemRow`, `TicketDetailRow`, etc.)
@@ -240,6 +268,8 @@ The Support context lacks any domain aggregates:
 There is no `Ticket` aggregate, no `Incident` aggregate. Business rules like *"a resolved ticket cannot be reopened"* or *"an incident must transition from Investigating → Ongoing → Resolved"* are not enforced anywhere.
 
 ### 15. Value Object Duplication Across Contexts
+
+> **GitHub Issues:** [tsqr-tool-lib#31](https://github.com/lstbob/tsqr-tool-lib/issues/31), [tsqr-communities#2](https://github.com/lstbob/tsqr-communities/issues/2)
 
 `LocationId` and `CountryId` are defined in **two separate bounded contexts** (`tsqr-tool-lib` and `tsqr-communities`):
 
@@ -252,6 +282,8 @@ These represent the same real-world concepts but are separate .NET types in sepa
 
 ### 16. No `INoSqlRepository` Contract for Non-Relational Stores
 
+> **GitHub Issue:** [tsqr-tool-lib#36](https://github.com/lstbob/tsqr-tool-lib/issues/36)
+
 The domain layer defines `IRepository<TAggregateRoot, TId>` as the sole persistence abstraction. There is no parallel contract for non-relational stores (e.g., `IDocumentRepository<T>` or `INoSqlRepository<TAggregateRoot>`). Every repository implementation — even a hypothetical MongoDB one — must conform to the same interface designed with SQL assumptions.
 
 A MongoDB-backed `ReservationRepository` would need to:
@@ -263,6 +295,8 @@ A MongoDB-backed `ReservationRepository` would need to:
 The domain layer should define a family of persistence contracts — for example `IRelationalRepository<T, TId>` and `IDocumentRepository<T>` — so the choice of storage technology is explicit at the interface level, not hidden behind a single abstraction that happens to have only a Dapper implementation today.
 
 ### 17. No Folder Structure Separation for Persistence Technologies
+
+> **GitHub Issue:** [tsqr-tool-lib#36](https://github.com/lstbob/tsqr-tool-lib/issues/36)
 
 All persistence code lives under a flat `Infrastructure/Dapper/` directory:
 
@@ -309,6 +343,8 @@ This makes the technology choice explicit at the directory level and provides a 
 
 ### 18. No Pure Abstraction for Persistence
 
+> **GitHub Issue:** [tsqr-tool-lib#36](https://github.com/lstbob/tsqr-tool-lib/issues/36)
+
 The repository abstraction is **leaky** — tightly coupled to Dapper's relational model:
 
 ```csharp
@@ -332,6 +368,8 @@ The `IRepository<TAggregateRoot, TId>` interface itself is technology-agnostic, 
 ---
 
 ### 19. Schema Design: SELECT \*, Missing Constraints, No Indexes
+
+> **GitHub Issues:** [tsqr-communities#3](https://github.com/lstbob/tsqr-communities/issues/3), [tsqr-soup-kitchen#3](https://github.com/lstbob/tsqr-soup-kitchen/issues/3), [tsqr-identity#2](https://github.com/lstbob/tsqr-identity/issues/2), [tsqr-autheo#2](https://github.com/lstbob/tsqr-autheo/issues/2), [tsqr-support#2](https://github.com/lstbob/tsqr-support/issues/2)
 
 Three schema-level issues appear in every microservice's database.
 
@@ -394,6 +432,8 @@ CREATE INDEX IX_Events_CommunityId ON Events(CommunityId);
 
 ### 20. Identity Schema Duplication and Type Mismatch
 
+> **GitHub Issue:** [tsqr-identity#2](https://github.com/lstbob/tsqr-identity/issues/2)
+
 `tsqr-identity` has **two mutually exclusive database schemas** that define different tables for the same concepts:
 
 | Source | Tables Created | Used By Code? |
@@ -415,6 +455,8 @@ The code's `ProfileRepository`, `UserAdminRepository`, and `RoleRepository` all 
 - Add a `REFERENCES` direction (identity's `user_profiles` references autheo's `Users`) if they ever share a database, or accept the application-level join if they remain separate
 
 ### 21. No Pagination on Any List Query
+
+> **GitHub Issues:** [tsqr-communities#4](https://github.com/lstbob/tsqr-communities/issues/4), [tsqr-soup-kitchen#2](https://github.com/lstbob/tsqr-soup-kitchen/issues/2)
 
 Every "get all" or "list" query across all microservices returns an **unbounded result set**:
 
@@ -448,6 +490,8 @@ public async Task<List<Tool>> GetAllAsync(int page = 1, int pageSize = 50, Cance
 ```
 
 ### 22. String Concatenation for Dynamic WHERE Clauses
+
+> **GitHub Issue:** [tsqr-soup-kitchen#2](https://github.com/lstbob/tsqr-soup-kitchen/issues/2)
 
 The Soup Kitchen WebApi query handlers build dynamic `WHERE` clauses using string concatenation:
 
@@ -489,6 +533,8 @@ Even better, use Dapper's `DynamicParameters` or a proper query specification pa
 
 ### 23. No Optimistic Concurrency Control
 
+> **GitHub Issue:** [tsqr-tool-lib#37](https://github.com/lstbob/tsqr-tool-lib/issues/37)
+
 No table has a row version column (`xmin` in PostgreSQL, or an explicit `RowVersion`/`ConcurrencyToken`). No `UPDATE` or `DELETE` statement uses a `WHERE` clause that verifies the row hasn't changed since it was read:
 
 ```sql
@@ -523,6 +569,8 @@ var row = await db.QuerySingleOrDefaultAsync<ToolRow>(
 
 ### 24. Ignored Affected Row Counts from Writes
 
+> **GitHub Issue:** [tsqr-tool-lib#38](https://github.com/lstbob/tsqr-tool-lib/issues/38)
+
 No `Update` or `Delete` call checks the number of rows affected:
 
 ```csharp
@@ -551,6 +599,8 @@ public virtual void Update(TEntity entity)
 ```
 
 ### 25. Hard Deletes Without Audit Trail
+
+> **GitHub Issues:** [tsqr-communities#3](https://github.com/lstbob/tsqr-communities/issues/3), [tsqr-soup-kitchen#3](https://github.com/lstbob/tsqr-soup-kitchen/issues/3), [tsqr-identity#2](https://github.com/lstbob/tsqr-identity/issues/2), [tsqr-autheo#2](https://github.com/lstbob/tsqr-autheo/issues/2), [tsqr-support#2](https://github.com/lstbob/tsqr-support/issues/2)
 
 All 6 microservices use hard `DELETE` with no soft-delete, audit trail, or tombstone record:
 
@@ -584,6 +634,8 @@ ALTER TABLE Members ADD COLUMN DeletedBy VARCHAR(200) NULL;
 ```
 
 ### 26. Separate Connections Bypassing the Scoped Unit of Work
+
+> **GitHub Issues:** [tsqr-communities#1](https://github.com/lstbob/tsqr-communities/issues/1) (epic), [tsqr-communities#5](https://github.com/lstbob/tsqr-communities/issues/5), [tsqr-soup-kitchen#2](https://github.com/lstbob/tsqr-soup-kitchen/issues/2)
 
 Several query implementations create their **own independent `NpgsqlConnection`** rather than using the scoped `ISqlUnitOfWork` from DI:
 
@@ -634,6 +686,8 @@ public sealed class GeographyQueries(ISqlUnitOfWork uow) : IGeographyQueries
 
 ### 27. Unnecessary TCP Connections for Read Queries
 
+> **GitHub Issues:** [tsqr-communities#5](https://github.com/lstbob/tsqr-communities/issues/5), [tsqr-soup-kitchen#2](https://github.com/lstbob/tsqr-soup-kitchen/issues/2)
+
 Even when transactions aren't needed (read-only queries), opening a new `NpgsqlConnection` per request is wasteful. Each `new NpgsqlConnection(connectionString)` + `OpenAsync()` involves:
 
 1. TCP 3-way handshake
@@ -648,6 +702,8 @@ The Soup Kitchen's WebApi query handlers are the worst offenders — each reques
 **Optimization suggestion:** Inject the scoped `ISqlUnitOfWork` into all query handlers instead of `connectionString`. This reuses the single connection-per-request that already exists in DI registration.
 
 ### 28. Blocking Async Call in Autheo's UserRepository
+
+> **GitHub Issue:** [tsqr-autheo#1](https://github.com/lstbob/tsqr-autheo/issues/1)
 
 `UserRepository.Update()` uses `.GetAwaiter().GetResult()` — a blocking call on an async method:
 
@@ -825,10 +881,24 @@ The codebase reflects a **team that understands DDD principles but applied them 
 
 **Communities, Soup Kitchen, Identity, and Support** are functionally complete but domain-model-light. They implement the Clean Architecture structure and use the same infrastructure stack, but their domain layers lack the rigor of tool-lib — no validation, no domain events, anemic models, public constructors.
 
-The **28 issues identified** fall into four categories:
+The **32 issues identified** fall into four categories:
 - **Architectural (8):** Aggregate boundary violations, missing event wiring, broken transactions, non-switchable persistence, missing NoSQL abstraction, no folder separation for persistence backends
 - **Modeling (6):** Anemic domains, orphaned entities, duplicated value objects, naive slugs, wrong aggregate root markers
 - **Code quality (4):** Debug method leaked, inconsistent error handling, contradictory state transitions, dead domain services
 - **Persistence & SQL (10):** Schema design gaps (no CHECK constraints, no indexes), identity schema duplication, no pagination, SQL injection risk via concatenation, no concurrency control, ignored row counts, hard deletes, connections bypassing UoW, unnecessary TCP connections, blocking async calls
+- **Infrastructure (4):** No CI/CD pipeline, zero test coverage outside tool-lib, no structured logging/tracing, schema hardening gaps
 
 The foundation is solid but incomplete. The Tool Library bounded context shows what the architecture is capable of; the other contexts need to be brought up to the same standard.
+
+## Missing Tickets
+
+Four additional issues were identified during analysis that had no corresponding document section:
+
+| # | Issue | Repo | Related Analysis |
+|---|-------|------|-----------------|
+| 1 | [CI/CD pipeline for all TSQR repos](https://github.com/lstbob/tsqr-deploy/issues/1) | tsqr-deploy | [post-analyi.txt](post-analyi.txt) item #15 |
+| 2 | [Test infrastructure across all microservices](https://github.com/lstbob/tsqr-tool-lib/issues/40) | tsqr-tool-lib | [post-analyi.txt](post-analyi.txt) item #16 |
+| 3 | [Structured logging and distributed tracing](https://github.com/lstbob/tsqr-common/issues/1) | tsqr-common | [post-analyi.txt](post-analyi.txt) item #17 |
+| 4 | [Schema hardening (Part of #32)](https://github.com/lstbob/tsqr-tool-lib/issues/41) | tsqr-tool-lib | [Section #19](https://github.com/lstbob/tsqr-domain/blob/main/thegoodandthebad.md#19-schema-design-select--missing-constraints-no-indexes) |
+
+These are cross-cutting concerns that apply across multiple repositories. They were not tied to any specific domain analysis section because they relate to the development and operational infrastructure rather than domain design decisions.
