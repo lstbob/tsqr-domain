@@ -1051,28 +1051,19 @@ The first round audit identified 28 + 4 issues; #33, #34, #35 closed nine entrie
 
 ### Recommended Sprint order
 
-Per issue index below — P0 (Critical) cluster assigned to **Sprint 19** (the most recently started existing sprint); P1 (High) spread across recent sprints 16/17/18; P2 (Medium) sits in Backlog awaiting the next iteration cycle (the project currently has sprints numbered 1–19; the owner can create new iterations for the Backlog backlog).
+Project currently has sprints 1–19 (latest: Sprint 19 starting 2027-03-19). Round-2 audit issues are distributed:
 
-**Critical (in Sprint 19 — must-do before any production usage):**
-1. autheo#3 (#20) — self-Admin + password reset + RevokedReasonIsReuse
-2. autheo#4 (#21) — refresh concurrency + audit preservation
-3. tool-lib#43 (#1) — queue regression + reservation breakage
-4. soup-kitchen#6 (#11) — multi-tenancy + PII exposure
-5. tsqr-deploy#2 (#27) — immediate SQL drift fix (the smallest P0; 2 SP)
-6. communities#6 (#7) — anonymous QuickRegister
-7. support#5 (#23) — anonymous submission + field-mismatch bug
-8. identity#5 (#15) — dead email-change feature
-9. tsqr-common#2 (#25) — shared DDD base classes (13 SP — biggest P0; foundational for #16/#17/#19 identity refactor)
+- **Sprint 19 (33 SP) — P0 Critical security/functional cluster, active sprint.** All seven genuinely Critical issues ship together. autheo#3/#4 are tightly coupled (both fix the broken auth audit trail). soup-kitchen#6 closes a live PII exposure. tool-lib#43 fixes the queue regression from #34. communities#6 + support#5 are anonymous-write breaches. tsqr-deploy#2 (the smallest P0, 2 SP) is the runtime-crash SQL drift fix.
 
-**High (Sprint 16-18 — next 6 weeks):**
-- Sprint 16 (24 SP): tool-lib#44 ownership auth, tool-lib#45 orphaned events, communities#7 state guards+UNIQUE+suspend-archive, autheo#5 rate limiting+asymmetric JWT
-- Sprint 17 (27 SP): tool-lib#46+47 RenewLoanCommand + MarkToolForRepair refactor, identity#8 CancellationToken+upsert, autheo#6 JWT claim contract, soup-kitchen#8 state machines+Donation behavior, identity#6 Entity base+IAggregateRoot+VOs
-- Sprint 18 (49 SP — overloud hotfix bucket, recommend rebalancing): communities#8 read-query-layer + soup-kitchen#7 cross-aggregate invariants + support#6 ticket state machine + identity#7 audit fields + tsqr-deploy#3 migration runner + tsqr-common#3 Common.WebApi + tool-lib#48 loanability pre-check + autheo#6 (already moved above to 17)
+- **Sprint 16 (29 SP) — P1 tool-lib cluster + dependencies.** Five tool-lib P1 issues (#44–#48) covering authorization, event wiring, RenewLoanCommand, MarkToolForRepair refactor, and LoanToolCommand pre-check; identity#8 (CancellationToken threading, 3 SP); autheo#6 (JWT claim contract, 5 SP — prerequisite for soup-kitchen#6 P0 done in Sprint 19 already, so this is follow-through).
 
-**Medium (Backlog — await next sprint iteration cycle):**
-- tsqr-common#3 (may also belong in Sprint 18 if rebalanced), communities#9, soup-kitchen#9, identity#9
+- **Sprint 17 (29 SP) — P1 soup-kitchen cluster + identity domain refactor.** soup-kitchen#7 (cross-aggregate invariants) and soup-kitchen#8 (state machines + Donation behavior + missing handlers) — together they fix the soup-kitchen "domain lies"; identity#6 (Entity base + IAggregateRoot + value objects — corrects audit §8) and identity#7 (Lock validation + audit fields).
 
-**Multi-iteration note:** Total backlog is 154 SP across 29 issues; a 4-developer team at 25 SP/sprint (50 SP/2-week cycle of breathing room) clears this in 6 sprints (~3 months). Sprint 19 alone holds 47 SP (P0 critical cluster) — flag for re-balancing if team capacity is below 47 SP.
+- **Sprint 18 (29 SP) — P1 communities cluster + autheo hardening + support.** communities#7 (state guards + UNIQUE + Suspend/Archive commands) and communities#8 (move read queries out of WebApi + Domain); autheo#5 (rate limiting + asymmetric JWT signing + per-service audience — the largest autheo hardening); support#6 (ticket state machine + Incident aggregate + Comments/Attachments + pagination).
+
+- **Backlog (46 SP) — seven deferred items awaiting the next iteration cycle.** Two P0 items kept in Backlog deliberately: **tsqr-common#2 (13 SP)** is the shared-kernel refactor (move Entity/ValueObject/IAggregateRoot into tsqr-common) — too big for one sprint, **recommended split into an epic** of 4-5 smaller stories (one per bounded context: tool-lib consume, communities consume, soup-kitchen consume, autheo consume, identity consume). **tsqr-identity#5 (5 SP)** — email-change feature — is P0 (security token leak) but deferred because the Critical Sprint 19 cluster already holds 33 SP; should be the first item promoted once Sprint 20 exists. Three P1 items in Backlog: tsqr-common#3 (TSQR.Common.WebApi — depends on common#2), tsqr-deploy#3 (migration framework adoption — large independent refactor). Three P2 items (communities#9, soup-kitchen#9, identity#9 — modeling refinements) round out Backlog.
+
+**Multi-iteration note:** A 4-developer team completing ~30 SP per 2-week sprint (7.5 SP/dev) clears the scheduled work in 4 sprints (~2 months); Backlog clearance needs Sprint 20 created by the project owner to absorb the remaining 46 SP, or splitting common#2 into an epic resolves most of that backlog.
 
 ### Issue index
 
@@ -1081,31 +1072,35 @@ Per issue index below — P0 (Critical) cluster assigned to **Sprint 19** (the m
 | 1 | [tsqr-tool-lib#43](https://github.com/lstbob/tsqr-tool-lib/issues/43) | tool-lib | P0 | 5 | Sprint 19 |
 | 2 | [tsqr-tool-lib#44](https://github.com/lstbob/tsqr-tool-lib/issues/44) | tool-lib | P1 | 5 | Sprint 16 |
 | 3 | [tsqr-tool-lib#45](https://github.com/lstbob/tsqr-tool-lib/issues/45) | tool-lib | P1 | 3 | Sprint 16 |
-| 4 | [tsqr-tool-lib#46](https://github.com/lstbob/tsqr-tool-lib/issues/46) | tool-lib | P1 | 3 | Sprint 17 |
-| 5 | [tsqr-tool-lib#47](https://github.com/lstbob/tsqr-tool-lib/issues/47) | tool-lib | P1 | 5 | Sprint 17 |
-| 6 | [tsqr-tool-lib#48](https://github.com/lstbob/tsqr-tool-lib/issues/48) | tool-lib | P1 | 5 | Sprint 18 |
+| 4 | [tsqr-tool-lib#46](https://github.com/lstbob/tsqr-tool-lib/issues/46) | tool-lib | P1 | 3 | Sprint 16 |
+| 5 | [tsqr-tool-lib#47](https://github.com/lstbob/tsqr-tool-lib/issues/47) | tool-lib | P1 | 5 | Sprint 16 |
+| 6 | [tsqr-tool-lib#48](https://github.com/lstbob/tsqr-tool-lib/issues/48) | tool-lib | P1 | 5 | Sprint 16 |
 | 7 | [tsqr-communities#6](https://github.com/lstbob/tsqr-communities/issues/6) | communities | P0 | 3 | Sprint 19 |
-| 8 | [tsqr-communities#7](https://github.com/lstbob/tsqr-communities/issues/7) | communities | P1 | 8 | Sprint 16 |
+| 8 | [tsqr-communities#7](https://github.com/lstbob/tsqr-communities/issues/7) | communities | P1 | 8 | Sprint 18 |
 | 9 | [tsqr-communities#8](https://github.com/lstbob/tsqr-communities/issues/8) | communities | P1 | 5 | Sprint 18 |
 | 10 | [tsqr-communities#9](https://github.com/lstbob/tsqr-communities/issues/9) | communities | P2 | 5 | Backlog |
 | 11 | [tsqr-soup-kitchen#6](https://github.com/lstbob/tsqr-soup-kitchen/issues/6) | soup-kitchen | P0 | 8 | Sprint 19 |
-| 12 | [tsqr-soup-kitchen#7](https://github.com/lstbob/tsqr-soup-kitchen/issues/7) | soup-kitchen | P1 | 8 | Sprint 18 |
+| 12 | [tsqr-soup-kitchen#7](https://github.com/lstbob/tsqr-soup-kitchen/issues/7) | soup-kitchen | P1 | 8 | Sprint 17 |
 | 13 | [tsqr-soup-kitchen#8](https://github.com/lstbob/tsqr-soup-kitchen/issues/8) | soup-kitchen | P1 | 8 | Sprint 17 |
 | 14 | [tsqr-soup-kitchen#9](https://github.com/lstbob/tsqr-soup-kitchen/issues/9) | soup-kitchen | P2 | 5 | Backlog |
-| 15 | [tsqr-identity#5](https://github.com/lstbob/tsqr-identity/issues/5) | identity | P0 | 5 | Sprint 19 |
+| 15 | [tsqr-identity#5](https://github.com/lstbob/tsqr-identity/issues/5) | identity | P0 | 5 | Backlog |
 | 16 | [tsqr-identity#6](https://github.com/lstbob/tsqr-identity/issues/6) | identity | P1 | 8 | Sprint 17 |
-| 17 | [tsqr-identity#7](https://github.com/lstbob/tsqr-identity/issues/7) | identity | P1 | 5 | Sprint 18 |
-| 18 | [tsqr-identity#8](https://github.com/lstbob/tsqr-identity/issues/8) | identity | P1 | 3 | Sprint 17 |
+| 17 | [tsqr-identity#7](https://github.com/lstbob/tsqr-identity/issues/7) | identity | P1 | 5 | Sprint 17 |
+| 18 | [tsqr-identity#8](https://github.com/lstbob/tsqr-identity/issues/8) | identity | P1 | 3 | Sprint 16 |
 | 19 | [tsqr-identity#9](https://github.com/lstbob/tsqr-identity/issues/9) | identity | P2 | 5 | Backlog |
 | 20 | [tsqr-autheo#3](https://github.com/lstbob/tsqr-autheo/issues/3) | autheo | P0 | 5 | Sprint 19 |
 | 21 | [tsqr-autheo#4](https://github.com/lstbob/tsqr-autheo/issues/4) | autheo | P0 | 5 | Sprint 19 |
-| 22 | [tsqr-autheo#5](https://github.com/lstbob/tsqr-autheo/issues/5) | autheo | P1 | 8 | Sprint 16 |
+| 22 | [tsqr-autheo#5](https://github.com/lstbob/tsqr-autheo/issues/5) | autheo | P1 | 8 | Sprint 18 |
 | 23 | [tsqr-support#5](https://github.com/lstbob/tsqr-support/issues/5) | support | P0 | 5 | Sprint 19 |
 | 24 | [tsqr-support#6](https://github.com/lstbob/tsqr-support/issues/6) | support | P1 | 8 | Sprint 18 |
-| 25 | [tsqr-common#2](https://github.com/lstbob/tsqr-common/issues/2) | common | P0 | 13 | Sprint 19 |
-| 26 | [tsqr-common#3](https://github.com/lstbob/tsqr-common/issues/3) | common | P1 | 5 | Sprint 18 |
+| 25 | [tsqr-common#2](https://github.com/lstbob/tsqr-common/issues/2) | common | P0 | 13 | Backlog |
+| 26 | [tsqr-common#3](https://github.com/lstbob/tsqr-common/issues/3) | common | P1 | 5 | Backlog |
 | 27 | [tsqr-deploy#2](https://github.com/lstbob/tsqr-deploy/issues/2) | deploy | P0 | 2 | Sprint 19 |
-| 28 | [tsqr-deploy#3](https://github.com/lstbob/tsqr-deploy/issues/3) | deploy | P1 | 8 | Sprint 18 |
-| 29 | [tsqr-autheo#6](https://github.com/lstbob/tsqr-autheo/issues/6) | autheo | P1 | 5 | Sprint 18 |
+| 28 | [tsqr-deploy#3](https://github.com/lstbob/tsqr-deploy/issues/3) | deploy | P1 | 8 | Backlog |
+| 29 | [tsqr-autheo#6](https://github.com/lstbob/tsqr-autheo/issues/6) | autheo | P1 | 5 | Sprint 16 |
+
+**Totals:** 166 SP across 29 issues. P0 = 51 SP across 9 issues (7 in Sprint 19, 2 deferred to Backlog); P1 = 100 SP across 17 issues (29 SP each in Sprint 16/17/18 = 87 SP, 13 SP in Backlog); P2 = 15 SP across 3 issues (all in Backlog).
+
+**Sprint capacity note:** Each sprint is sized to ~28-30 SP — a 4-developer team at ~7.5 SP/dev/sprint. Sprint 19 carries 33 SP (over by ~3) because the entire P0 Critical-security cluster must ship together (autheo#3/#4 cannot ship without each other; soup-kitchen#6 multi-tenancy is a security-tracked P0 from the same audit). Backlog holds 46 SP — the project currently has sprints only through Sprint 19; creating Sprint 20+ is required to schedule the Backlog items. **Outstanding "too-big-for-one-sprint" issue:** tsqr-common#2 (13 SP P0 — shared kernel) likely needs splitting into an epic of 4-5 smaller stories (one per bounded context: tool-lib consume, communities consume, soup-kitchen consume, autheo consume, identity consume).
 
 **Total:** 29 issues across 8 repositories; 154 story points. P0 = 53 SP across 10 issues; P1 = 86 SP across 14 issues; P2 = 15 SP across 5 issues.
