@@ -65,7 +65,7 @@ This audit is a **second-round** analysis commissioned after issues `thegoodandt
 
 ### 1. ReservationQueueService Direction Bug + ReservationCreatedEvent Breakage
 
-> **GitHub Issues:** [tsqr-tool-lib#42](https://github.com/lstbob/tsqr-tool-lib/issues/42) (P0, 5 SP)
+> **GitHub Issues:** [tsqr-tool-lib#43](https://github.com/lstbob/tsqr-tool-lib/issues/43) (P0, 5 SP)
 
 **Severity:** Critical — **regression from #34** that broke the reservation queue entirely.
 
@@ -117,7 +117,7 @@ if (reserveResult.IsFailure)
 
 ### 2. Authorization: No Ownership Checks on Reservation/Loan/Repair Commands
 
-> **GitHub Issue:** [tsqr-tool-lib#43](https://github.com/lstbob/tsqr-tool-lib/issues/43) (P1, 5 SP)
+> **GitHub Issue:** [tsqr-tool-lib#44](https://github.com/lstbob/tsqr-tool-lib/issues/44) (P1, 5 SP)
 
 **Severity:** High.
 
@@ -145,7 +145,7 @@ public async Task<Result> ExecuteAsync(CancelReservationCommand command, ...) {
 
 ### 3. Six Orphaned Domain Event Handlers
 
-> **GitHub Issue:** [tsqr-tool-lib#44](https://github.com/lstbob/tsqr-tool-lib/issues/44) (P1, 3 SP)
+> **GitHub Issue:** [tsqr-tool-lib#45](https://github.com/lstbob/tsqr-tool-lib/issues/45) (P1, 3 SP)
 
 **Severity:** High.
 
@@ -172,7 +172,7 @@ public async Task<Result> ExecuteAsync(CancelReservationCommand command, ...) {
 
 ### 4. RenewLoanCommand + Endpoint Deferred
 
-> **GitHub Issue:** [tsqr-tool-lib#45](https://github.com/lstbob/tsqr-tool-lib/issues/45) (P1, 3 SP)
+> **GitHub Issue:** [tsqr-tool-lib#46](https://github.com/lstbob/tsqr-tool-lib/issues/46) (P1, 3 SP)
 
 **Severity:** High — half-wiring closes only half of audit §6 ("No loan renewal").
 
@@ -191,7 +191,7 @@ public async Task<Result> ExecuteAsync(CancelReservationCommand command, ...) {
 
 ### 5. MarkToolForRepairCommandHandler Still Violates One-Aggregate-Per-Tx
 
-> **GitHub Issue:** [tsqr-tool-lib#46](https://github.com/lstbob/tsqr-tool-lib/issues/46) (P1, 5 SP)
+> **GitHub Issue:** [tsqr-tool-lib#47](https://github.com/lstbob/tsqr-tool-lib/issues/47) (P1, 5 SP)
 
 **Severity:** High — audit §1 listed this handler among the boundary violators; #33 closed 3 of 4, this one was left.
 
@@ -215,7 +215,7 @@ await orchestrator.SaveEntitiesAsync([item, record], ct);             // both ag
 
 ### 6. LoanToolCommand Lost Loanability Pre-check + Member.IsEligibleToBorrow Ignores Fines
 
-> **GitHub Issue:** [tsqr-tool-lib#47](https://github.com/lstbob/tsqr-tool-lib/issues/47) (P1, 5 SP)
+> **GitHub Issue:** [tsqr-tool-lib#48](https://github.com/lstbob/tsqr-tool-lib/issues/48) (P1, 5 SP)
 
 **Severity:** High.
 
@@ -1051,56 +1051,61 @@ The first round audit identified 28 + 4 issues; #33, #34, #35 closed nine entrie
 
 ### Recommended Sprint order
 
-**Critical (must-do before any production usage):**
+Per issue index below — P0 (Critical) cluster assigned to **Sprint 19** (the most recently started existing sprint); P1 (High) spread across recent sprints 16/17/18; P2 (Medium) sits in Backlog awaiting the next iteration cycle (the project currently has sprints numbered 1–19; the owner can create new iterations for the Backlog backlog).
+
+**Critical (in Sprint 19 — must-do before any production usage):**
 1. autheo#3 (#20) — self-Admin + password reset + RevokedReasonIsReuse
 2. autheo#4 (#21) — refresh concurrency + audit preservation
-3. tool-lib#42 (#1) — queue regression + reservation breakage
+3. tool-lib#43 (#1) — queue regression + reservation breakage
 4. soup-kitchen#6 (#11) — multi-tenancy + PII exposure
-5. tsqr-deploy#2 (#27) — immediate SQL drift fix
+5. tsqr-deploy#2 (#27) — immediate SQL drift fix (the smallest P0; 2 SP)
 6. communities#6 (#7) — anonymous QuickRegister
 7. support#5 (#23) — anonymous submission + field-mismatch bug
 8. identity#5 (#15) — dead email-change feature
+9. tsqr-common#2 (#25) — shared DDD base classes (13 SP — biggest P0; foundational for #16/#17/#19 identity refactor)
 
-**High (next 2-3 sprints):**
-9. tsqr-common#2 (#25) — shared kernel base classes
-10. autheo#5 (#22) — rate limiting + asymmetric JWT
-11. tool-lib#43-46 + soup-kitchen#7-8 + identity#6-8 (High bucket)
+**High (Sprint 16-18 — next 6 weeks):**
+- Sprint 16 (24 SP): tool-lib#44 ownership auth, tool-lib#45 orphaned events, communities#7 state guards+UNIQUE+suspend-archive, autheo#5 rate limiting+asymmetric JWT
+- Sprint 17 (27 SP): tool-lib#46+47 RenewLoanCommand + MarkToolForRepair refactor, identity#8 CancellationToken+upsert, autheo#6 JWT claim contract, soup-kitchen#8 state machines+Donation behavior, identity#6 Entity base+IAggregateRoot+VOs
+- Sprint 18 (49 SP — overloud hotfix bucket, recommend rebalancing): communities#8 read-query-layer + soup-kitchen#7 cross-aggregate invariants + support#6 ticket state machine + identity#7 audit fields + tsqr-deploy#3 migration runner + tsqr-common#3 Common.WebApi + tool-lib#48 loanability pre-check + autheo#6 (already moved above to 17)
 
-**Medium (background):**
-- tsqr-common#3, tsqr-deploy#3, autheo#6, communities#9, soup-kitchen#9, identity#9, tool-lib#44/45, support#6
+**Medium (Backlog — await next sprint iteration cycle):**
+- tsqr-common#3 (may also belong in Sprint 18 if rebalanced), communities#9, soup-kitchen#9, identity#9
+
+**Multi-iteration note:** Total backlog is 154 SP across 29 issues; a 4-developer team at 25 SP/sprint (50 SP/2-week cycle of breathing room) clears this in 6 sprints (~3 months). Sprint 19 alone holds 47 SP (P0 critical cluster) — flag for re-balancing if team capacity is below 47 SP.
 
 ### Issue index
 
 | # | Issue | Repo | Priority | Estimate (SP) | Sprint |
 |---|-------|------|----------|---------------|--------|
-| 1 | [tsqr-tool-lib#42](https://github.com/lstbob/tsqr-tool-lib/issues/42) | tool-lib | P0 | 5 | Sprint 20 |
-| 2 | [tsqr-tool-lib#43](https://github.com/lstbob/tsqr-tool-lib/issues/43) | tool-lib | P1 | 5 | Sprint 22 |
-| 3 | [tsqr-tool-lib#44](https://github.com/lstbob/tsqr-tool-lib/issues/44) | tool-lib | P1 | 3 | Sprint 22 |
-| 4 | [tsqr-tool-lib#45](https://github.com/lstbob/tsqr-tool-lib/issues/45) | tool-lib | P1 | 3 | Sprint 23 |
-| 5 | [tsqr-tool-lib#46](https://github.com/lstbob/tsqr-tool-lib/issues/46) | tool-lib | P1 | 5 | Sprint 23 |
-| 6 | [tsqr-tool-lib#47](https://github.com/lstbob/tsqr-tool-lib/issues/47) | tool-lib | P1 | 5 | Sprint 24 |
-| 7 | [tsqr-communities#6](https://github.com/lstbob/tsqr-communities/issues/6) | communities | P0 | 3 | Sprint 21 |
-| 8 | [tsqr-communities#7](https://github.com/lstbob/tsqr-communities/issues/7) | communities | P1 | 8 | Sprint 22 |
-| 9 | [tsqr-communities#8](https://github.com/lstbob/tsqr-communities/issues/8) | communities | P1 | 5 | Sprint 23 |
-| 10 | [tsqr-communities#9](https://github.com/lstbob/tsqr-communities/issues/9) | communities | P2 | 5 | Sprint 24 |
-| 11 | [tsqr-soup-kitchen#6](https://github.com/lstbob/tsqr-soup-kitchen/issues/6) | soup-kitchen | P0 | 8 | Sprint 21 |
-| 12 | [tsqr-soup-kitchen#7](https://github.com/lstbob/tsqr-soup-kitchen/issues/7) | soup-kitchen | P1 | 8 | Sprint 23 |
-| 13 | [tsqr-soup-kitchen#8](https://github.com/lstbob/tsqr-soup-kitchen/issues/8) | soup-kitchen | P1 | 8 | Sprint 24 |
-| 14 | [tsqr-soup-kitchen#9](https://github.com/lstbob/tsqr-soup-kitchen/issues/9) | soup-kitchen | P2 | 5 | Sprint 25 |
-| 15 | [tsqr-identity#5](https://github.com/lstbob/tsqr-identity/issues/5) | identity | P0 | 5 | Sprint 21 |
-| 16 | [tsqr-identity#6](https://github.com/lstbob/tsqr-identity/issues/6) | identity | P1 | 8 | Sprint 23 |
-| 17 | [tsqr-identity#7](https://github.com/lstbob/tsqr-identity/issues/7) | identity | P1 | 5 | Sprint 24 |
-| 18 | [tsqr-identity#8](https://github.com/lstbob/tsqr-identity/issues/8) | identity | P1 | 3 | Sprint 22 |
-| 19 | [tsqr-identity#9](https://github.com/lstbob/tsqr-identity/issues/9) | identity | P2 | 5 | Sprint 25 |
-| 20 | [tsqr-autheo#3](https://github.com/lstbob/tsqr-autheo/issues/3) | autheo | P0 | 5 | Sprint 20 |
-| 21 | [tsqr-autheo#4](https://github.com/lstbob/tsqr-autheo/issues/4) | autheo | P0 | 5 | Sprint 20 |
-| 22 | [tsqr-autheo#5](https://github.com/lstbob/tsqr-autheo/issues/5) | autheo | P1 | 8 | Sprint 22 |
-| 23 | [tsqr-support#5](https://github.com/lstbob/tsqr-support/issues/5) | support | P0 | 5 | Sprint 21 |
-| 24 | [tsqr-support#6](https://github.com/lstbob/tsqr-support/issues/6) | support | P1 | 8 | Sprint 24 |
-| 25 | [tsqr-common#2](https://github.com/lstbob/tsqr-common/issues/2) | common | P0 | 13 | Sprint 22 |
-| 26 | [tsqr-common#3](https://github.com/lstbob/tsqr-common/issues/3) | common | P1 | 5 | Sprint 23 |
-| 27 | [tsqr-deploy#2](https://github.com/lstbob/tsqr-deploy/issues/2) | deploy | P0 | 2 | Sprint 21 |
-| 28 | [tsqr-deploy#3](https://github.com/lstbob/tsqr-deploy/issues/3) | deploy | P1 | 8 | Sprint 23 |
-| 29 | [tsqr-autheo#6](https://github.com/lstbob/tsqr-autheo/issues/6) | autheo | P1 | 5 | Sprint 24 |
+| 1 | [tsqr-tool-lib#43](https://github.com/lstbob/tsqr-tool-lib/issues/43) | tool-lib | P0 | 5 | Sprint 19 |
+| 2 | [tsqr-tool-lib#44](https://github.com/lstbob/tsqr-tool-lib/issues/44) | tool-lib | P1 | 5 | Sprint 16 |
+| 3 | [tsqr-tool-lib#45](https://github.com/lstbob/tsqr-tool-lib/issues/45) | tool-lib | P1 | 3 | Sprint 16 |
+| 4 | [tsqr-tool-lib#46](https://github.com/lstbob/tsqr-tool-lib/issues/46) | tool-lib | P1 | 3 | Sprint 17 |
+| 5 | [tsqr-tool-lib#47](https://github.com/lstbob/tsqr-tool-lib/issues/47) | tool-lib | P1 | 5 | Sprint 17 |
+| 6 | [tsqr-tool-lib#48](https://github.com/lstbob/tsqr-tool-lib/issues/48) | tool-lib | P1 | 5 | Sprint 18 |
+| 7 | [tsqr-communities#6](https://github.com/lstbob/tsqr-communities/issues/6) | communities | P0 | 3 | Sprint 19 |
+| 8 | [tsqr-communities#7](https://github.com/lstbob/tsqr-communities/issues/7) | communities | P1 | 8 | Sprint 16 |
+| 9 | [tsqr-communities#8](https://github.com/lstbob/tsqr-communities/issues/8) | communities | P1 | 5 | Sprint 18 |
+| 10 | [tsqr-communities#9](https://github.com/lstbob/tsqr-communities/issues/9) | communities | P2 | 5 | Backlog |
+| 11 | [tsqr-soup-kitchen#6](https://github.com/lstbob/tsqr-soup-kitchen/issues/6) | soup-kitchen | P0 | 8 | Sprint 19 |
+| 12 | [tsqr-soup-kitchen#7](https://github.com/lstbob/tsqr-soup-kitchen/issues/7) | soup-kitchen | P1 | 8 | Sprint 18 |
+| 13 | [tsqr-soup-kitchen#8](https://github.com/lstbob/tsqr-soup-kitchen/issues/8) | soup-kitchen | P1 | 8 | Sprint 17 |
+| 14 | [tsqr-soup-kitchen#9](https://github.com/lstbob/tsqr-soup-kitchen/issues/9) | soup-kitchen | P2 | 5 | Backlog |
+| 15 | [tsqr-identity#5](https://github.com/lstbob/tsqr-identity/issues/5) | identity | P0 | 5 | Sprint 19 |
+| 16 | [tsqr-identity#6](https://github.com/lstbob/tsqr-identity/issues/6) | identity | P1 | 8 | Sprint 17 |
+| 17 | [tsqr-identity#7](https://github.com/lstbob/tsqr-identity/issues/7) | identity | P1 | 5 | Sprint 18 |
+| 18 | [tsqr-identity#8](https://github.com/lstbob/tsqr-identity/issues/8) | identity | P1 | 3 | Sprint 17 |
+| 19 | [tsqr-identity#9](https://github.com/lstbob/tsqr-identity/issues/9) | identity | P2 | 5 | Backlog |
+| 20 | [tsqr-autheo#3](https://github.com/lstbob/tsqr-autheo/issues/3) | autheo | P0 | 5 | Sprint 19 |
+| 21 | [tsqr-autheo#4](https://github.com/lstbob/tsqr-autheo/issues/4) | autheo | P0 | 5 | Sprint 19 |
+| 22 | [tsqr-autheo#5](https://github.com/lstbob/tsqr-autheo/issues/5) | autheo | P1 | 8 | Sprint 16 |
+| 23 | [tsqr-support#5](https://github.com/lstbob/tsqr-support/issues/5) | support | P0 | 5 | Sprint 19 |
+| 24 | [tsqr-support#6](https://github.com/lstbob/tsqr-support/issues/6) | support | P1 | 8 | Sprint 18 |
+| 25 | [tsqr-common#2](https://github.com/lstbob/tsqr-common/issues/2) | common | P0 | 13 | Sprint 19 |
+| 26 | [tsqr-common#3](https://github.com/lstbob/tsqr-common/issues/3) | common | P1 | 5 | Sprint 18 |
+| 27 | [tsqr-deploy#2](https://github.com/lstbob/tsqr-deploy/issues/2) | deploy | P0 | 2 | Sprint 19 |
+| 28 | [tsqr-deploy#3](https://github.com/lstbob/tsqr-deploy/issues/3) | deploy | P1 | 8 | Sprint 18 |
+| 29 | [tsqr-autheo#6](https://github.com/lstbob/tsqr-autheo/issues/6) | autheo | P1 | 5 | Sprint 18 |
 
 **Total:** 29 issues across 8 repositories; 154 story points. P0 = 53 SP across 10 issues; P1 = 86 SP across 14 issues; P2 = 15 SP across 5 issues.
