@@ -5,9 +5,55 @@ This audit is a **second-round** analysis commissioned after issues `thegoodandt
 > **Companion:** [`thegoodandthebad.md`](./thegoodandthebad.md) (round 1).
 > **Method:** Each bounded context inspected in parallel by an `explore` agent; cross-cutting concerns (tsqr-common, tsqr-deploy, tsqr-gateway, integration) inspected separately. File paths and line numbers reference the state of `main` on the audit date.
 
+> **Status update, 2026-11-19.** See the [status table](#status-update-2026-11-19) for where each Round 2 issue stands, and [Round 3](#round-3--new-findings-2026-11-19) at the end of this file for new findings from a full re-scan.
+> Product overview: [`townsquare.md`](./townsquare.md). DDD model: [`domain-driven-design.md`](./domain-driven-design.md).
+
+---
+
+## Status Update (2026-11-19)
+
+✅ closed and confirmed in code · 🟡 closed, but a gap remains in code · ❌ open
+
+| # | Issue | Status | What is true in code today |
+|---|---|---|---|
+| 1 | tool-lib#43 Queue direction / ReservationCreated | ✅ | `MoveUpInQueue` is fixed and tested. Note: the event's `ReservationId` is 0 at dispatch time. |
+| 2 | tool-lib#44 Ownership checks | 🟡 | `MemberAccounts` maps `sub` to a member, and `AccessGuard` checks ownership on reserve, loan and repair. **`renew` has no permission or ownership check.** `AdminId` and `OwnerId` come from the request body (R3-10). |
+| 3 | tool-lib#45 Orphaned handlers | 🟡 | Handlers are wired. `ReturnReminderEvent` is still never raised, and the "notification" events change state but notify no one. |
+| 4 | tool-lib#46 RenewLoan | 🟡 | Command, endpoint and 6 tests. It ignores waiting reservations and is unprotected. |
+| 5 | tool-lib#47 MarkForRepair one-aggregate | ✅ | Reservations are cancelled through `ToolMarkedForRepairEvent`. |
+| 6 | tool-lib#48 Loanability pre-check and fines gate | ✅ | `EnsureEligibleToBorrow` checks fines ≤ 50 and no overdue loans. *But overdue loans never end (R3-1), so members get locked out.* |
+| 7 | communities#6 Authorization / QuickRegister | 🟡 | The service requires `communities.manage`. The **gateway still routes quick-register as public** (R3-14). Contact email and phone are returned anonymously. |
+| 8 | communities#7 State guards and Suspend/Archive | ❌ | Open. `Confirm` works from any state. |
+| 9 | communities#8 Read query layer | ✅ | |
+| 10 | communities#9 Slug, typed FKs, CountryCode | 🟡 | Shipped. `CountryCode.FromName` collides ("Austria" and "Australia" both become "AU"). |
+| 11 | soup-kitchen#6 Multi-tenancy / PII | ❌ | #21 (authenticated PII reads) shipped. #22 (scoping) is **uncommitted WIP that does not compile**. `UpdateEvent` allows a cross-tenant takeover (R3-2, R3-3). |
+| 12 | soup-kitchen#7 Cross-aggregate invariants | ❌ | Event existence is checked; capacity and event status are not. |
+| 13 | soup-kitchen#8 State machines / Donation | ❌ | Open. Confirm and Cancel have no endpoints. |
+| 14 | soup-kitchen#9 Unique constraints, events, UoW | 🟡 | Shipped. Events are dispatched after commit, but **no handlers are registered**. |
+| 15 | identity#5 Email change | ✅ | Two-phase: hashed token, then Autheo's internal `change-email`. Not atomic across the two services. |
+| 16 | identity#6 Entity base / IAggregateRoot | ❌ | Open |
+| 17 | identity#7 Lock invariants and audit | ✅ | `Suspend` (≤ 365 days, reason, by) and `Reinstate`. **Not enforced at login** (R3-6). |
+| 18 | identity#8 CancellationToken / upsert race | 🟡 | Tokens are passed through. Updates still use a COALESCE upsert, so fields cannot be cleared. |
+| 19 | identity#9 Permission model | 🟡 | Role permissions are stored and policies enforced. **The stored roles and permissions never reach the JWT**; the static `RolePermissions` map is used instead (R3-11). |
+| 20 | autheo#3 Self-admin / reset / reuse flag | ✅ | Registration always gives Regular. Reset works (hashed, 1 hour). The reuse flag is persisted. |
+| 21 | autheo#4 Refresh rotation lock | ✅ | Conditional update. Losing the race counts as reuse. Revoke keeps the audit fields. |
+| 22 | autheo#5 Rate limit, RS256, audiences | ❌ | Open. Only the global limit of 600 requests per minute per IP. |
+| 23 | support#5 Submission auth / tenancy | 🟡 | Shipped. But **`GET /api/tickets` is anonymous and returns `SubmitterEmail`**, and a missing claim falls back to community 1 (R3-4). |
+| 24 | support#6 State machine, Incident, comments, paging | 🟡 | State machine, Incident and pagination are done. Comments and attachments are still missing, so the issue is still open. |
+| 25 | common#2 Shared DDD base classes | ❌ | Open |
+| 26 | common#3 `TSQR.Common.WebApi` | 🟡 | Used by every service. The gateway still has its own copies. |
+| 27 | deploy#2 SQL drift | 🟡 | The deploy SQL is fixed. **tool-lib's local `docker/init.sql` has drifted again** (no `MemberAccounts` or `CommunityId`). |
+| 28 | deploy#3 Migration runner | ❌ | Open |
+| 29 | autheo#6 `mbr` contract | ✅ | `mbr` is retired. `sub` is canonical and `community_id` is added (`docs/JWT-CONTRACT.md`). |
+
+**Score:** 9 ✅ · 12 🟡 · 8 ❌. Every P0 except soup-kitchen#6 and common#2 is closed. The 🟡 items are where Round 3 picks up.
+
 ---
 
 ## Table of Contents
+
+0. [Status Update (2026-11-19)](#status-update-2026-11-19)
+- [Round 3: New Findings (2026-11-19)](#round-3--new-findings-2026-11-19)
 
 ### Tool Library (regressions + new gaps opened by #33/#34/#35)
 
@@ -1104,3 +1150,157 @@ Project currently has sprints 1–19 (latest: Sprint 19 starting 2027-03-19). Ro
 **Sprint capacity note:** Each sprint is sized to ~28-30 SP — a 4-developer team at ~7.5 SP/dev/sprint. Sprint 19 carries 33 SP (over by ~3) because the entire P0 Critical-security cluster must ship together (autheo#3/#4 cannot ship without each other; soup-kitchen#6 multi-tenancy is a security-tracked P0 from the same audit). Backlog holds 46 SP — the project currently has sprints only through Sprint 19; creating Sprint 20+ is required to schedule the Backlog items. **Outstanding "too-big-for-one-sprint" issue:** tsqr-common#2 (13 SP P0 — shared kernel) likely needs splitting into an epic of 4-5 smaller stories (one per bounded context: tool-lib consume, communities consume, soup-kitchen consume, autheo consume, identity consume).
 
 **Total:** 29 issues across 8 repositories; 154 story points. P0 = 53 SP across 10 issues; P1 = 86 SP across 14 issues; P2 = 15 SP across 5 issues.
+---
+
+## Round 3 — New Findings (2026-11-19)
+
+**Method:**
+- All 15 `tsqr-*` repositories were re-scanned on `main`, plus the uncommitted working tree in `tsqr-soup-kitchen`. Each context was read in parallel.
+- Findings marked **(v)** were then confirmed by reading the cited code directly.
+- None of these are filed as GitHub issues yet.
+
+**Summary.** Rounds 1 and 2 were mostly about **structure**: aggregates, persistence and concurrency. Most of that work has shipped. Round 3 is mostly about **behaviour and boundaries**:
+- a broken business flow in the core domain;
+- gaps in tenant isolation;
+- two IAM models that are not connected;
+- seed data and mappings that have drifted away from the domain rules.
+
+### Critical
+
+#### R3-1. Returning a tool never ends its Loan (v) — tool-lib
+**Code:**
+- `ReturnToolCommandHandler` only calls `item.Return(condition)`.
+- `ToolReturnedEventHandler` only advances the reservation queue.
+- `Loan.EndLoan` is reachable only from `POST api/loans/mark-not-returned`.
+
+**Impact:**
+- Every loan stays `Active` forever, so no fine is calculated on a normal return.
+- Once the due date passes, `Member.EnsureEligibleToBorrow` treats the loan as overdue and **blocks the member from borrowing again**.
+
+This is the core lending loop, and it is open-ended.
+
+**Fix:**
+- In `ToolReturnedEventHandler`, or in a dedicated handler, load the member's active `Loan` for the item and call `EndLoan(returnDate)`.
+- Add a test covering the full flow: loan → return → loan again.
+
+#### R3-2. Soup-kitchen `UpdateEvent` cross-tenant takeover (v)
+**Code:**
+- `UpdateEventCommandHandler` loads `eventRepository.GetByIdAsync(id)` without a tenant filter.
+- `Event.UpdateDetails(..., communityId)` then assigns `CommunityId = communityId`.
+
+**Impact:** a coordinator in community A can rewrite **and take over** any event in community B. `UpdateDetails` also accepts any status (bypassing the state machine), past dates and empty names.
+
+**Fix:**
+- Load the event by `(id, communityId)`.
+- Remove `communityId` from `UpdateDetails`. A tenant is set by the factory and never changes.
+- Route status changes through `Activate`, `Complete` and `Cancel`, with guards (soup-kitchen#8).
+
+#### R3-3. Soup-kitchen uncommitted scoping WIP does not compile (v)
+**Code:**
+- The working tree has 13 modified WebApi files plus a new `CommunityControllerBase.cs`. Together they take the tenant from the `community_id` claim.
+- `GetDashboardStatsHandler` calls `GetStatsAsync(request.CommunityId, ct)`, but `IDashboardQueries` and `DashboardQueries` only define `GetStatsAsync(ct)`.
+- The test at `QueryHandlerTests.cs:144` uses the old signature.
+
+**Impact:** the WIP for soup-kitchen#22 cannot be built or shipped, and the dashboard counts across all tenants.
+
+**Fix:** add `communityId` to the query interface and to its SQL, update the test, then commit the change as #22.
+
+#### R3-4. Support exposes submitter emails anonymously and defaults the tenant (v)
+**Code:**
+- `TicketsController.List` and `Get` are `[AllowAnonymous]`.
+- `TicketListItemDto` and `TicketDetailDto` include `SubmitterEmail`.
+- `CurrentUser.CommunityId` returns `1` when the claim is missing or invalid.
+
+**Impact:**
+- Anyone on the internet can list community 1's tickets, including the submitters' email addresses.
+- Every authenticated user who has no membership is silently placed in community 1.
+
+This directly breaks the JWT contract's rule: never default to community 1.
+
+**Fix:**
+- Require authentication for ticket reads, or remove the PII from the public DTO.
+- Return 403 when `community_id` is missing.
+
+#### R3-5. JWT signing key committed in tsqr-identity (v)
+**Code:** `src/TSQR.Identity.Api/appsettings.json` → `"Jwt": { "Key": "ThisIsASecretKeyForTsqrIdentity_…" }`.
+
+**Impact:** all services share one symmetric key. If this value is ever used outside local development, anyone who has the file can mint a token for any service.
+
+**Fix:**
+- Remove the value and require it from the environment, as autheo already does.
+- Treat the key as compromised and rotate it.
+- autheo#5 (RS256 with per-service audiences) removes this whole class of risk.
+
+#### R3-6. Identity suspension and deletion do not stop logins (v)
+**Code:** `LoginHandler` only checks `user.IsActive`. `UserProfile.Suspend` and soft delete in identity are never sent to autheo, and the refresh flow does not check them either.
+
+**Impact:** a suspended or deleted user can keep logging in and refreshing tokens. The suspension feature exists only on paper.
+
+**Fix:**
+- Raise `UserSuspended`, `UserReinstated` and `UserDeleted` integration events through the outbox, have autheo consume them to deactivate the user, and revoke the user's refresh tokens.
+- Interim option: autheo calls identity during login.
+
+### High
+
+#### R3-7. Tool-lib access requests are not persisted (v)
+`Member.RequestAccess(identification)` sets `AccessRequestStatus` and `Identification`. Neither field appears anywhere in `TSQR.ToolLibrary.Infrastructure` (0 references). After a reload the status is `NotSet`, so `ApproveAccess` and `DenyAccess` always fail. The membership-onboarding flow is broken end to end.
+
+#### R3-8. Seeded Specialty policy cannot be loaded (v)
+Every SQL seed (`docker/init.sql`, `tsqr-deploy/infra/02-tool-library.sql`, `11-tool-library-policies.sql`) inserts the Specialty policy with `MaxRenewalCount = 0`. `Policy.ValidatePolicyFields` rejects `maxRenewalCount <= 0`, so rehydration fails, and loans and reservations of Specialty tools return "No lending policy configured".
+
+**Decide which is right:** either "no renewals" is a valid business rule (allow 0, which is the likely intent for expensive equipment), or the seed is wrong. The current error message ("cannot be negative") is also inaccurate.
+
+#### R3-9. Tool-lib tenancy exists only as a column
+Commands default `CommunityId = 1`, controllers never set it, and no read or write filters by it. Dashboard and catalogue counts are global. Autheo already issues `community_id` from tool-lib's own `MemberAccounts`, so the claim is available but tool-lib does not use it.
+
+#### R3-10. Tool-lib authorization gaps
+- `POST api/loans/{id}/renew` has only `[Authorize]`: no permission and no ownership check.
+- `return` and reservation `complete` do not check ownership.
+- `approve-access` and `verify` take `AdminId` from the request body, so it can be spoofed. `MemberVerificationService` is not used.
+- `RegisterTool` takes `OwnerId` from the request body.
+- `request-access` is anonymous and accepts any `MemberId`.
+- The member list and member detail (PII) are readable by any authenticated user.
+
+#### R3-11. Two IAM models that are not connected
+- Identity stores roles in `user_roles` and permissions in `roles_permissions`.
+- Autheo issues `role` from its own `Users.RoleName`, and `permission` claims from the **static** `RolePermissions.ForRole(role)` map in tsqr-common.
+
+The two never meet. In addition:
+- No API changes a user's role away from `Regular` (registration always assigns `Regular`), so admins can only be created by editing the database directly.
+- `Role.AddPermission` accepts any string, not just entries from `Permissions.All`.
+- Role edits cannot be saved (the repository only supports create).
+
+#### R3-12. Banned is not terminal (v)
+`Member.Suspend()` only guards against `Suspended`, so `Banned → Suspended → Active` through `Reinstate()`. `Suspend` and `Ban` are also allowed from `NotSet`.
+
+**Fix:** reject `Suspend` and `Reinstate` when the member is `Banned`, and add a transition test.
+
+### Medium
+
+| # | Context | Finding |
+|---|---|---|
+| R3-13 | autheo | Password reset or change does not revoke refresh tokens. `RefreshTokenExpirationDays` is ignored (7 days is hard-coded). The password minimum is 6 characters. There is no login throttling. Without `UseForwardedHeaders`, the per-IP limiter and `CreatedByIp`/`RevokedByIp` see the gateway's IP. |
+| R3-14 | gateway | Allows by default: any route without a policy is public. Its public routes have drifted from the services (soup-kitchen GET routes and communities quick-register are public at the gateway, then rejected by the services). No rate limiting or forwarded headers. It duplicates correlation and OTel code instead of using `TSQR.Common.WebApi`. |
+| R3-15 | communities | Lifecycle transitions are not guarded (communities#7). `CountryCode.FromName` collides. `DapperUnitOfWork` retries `Commit()` after a transient error (unsafe; soup-kitchen already removed this pattern). Entities are rehydrated through public constructors. `CreateCommunity` confirms automatically, while quick-register does not. |
+| R3-16 | soup-kitchen | `MaxGuests` is never compared with the total guest count. You can add guests to closed events. Domain events have no handlers. `Volunteer.MemberId` comes from the request body and is not checked against `sub`. Aggregate loading is N+1. |
+| R3-17 | tool-lib | Reservation `ExpiryDate` is never enforced (no scheduler). Renew ignores waiting holds. There is no per-member item limit and no duplicate-reservation check. Reserving does not check eligibility. Policy location is always null. "Notification" events notify no one. |
+| R3-18 | messaging | The outbox and publisher exist in tool-lib, but nothing produces integration events, the transport is `LoggingIntegrationEventTransport`, and there is no inbox. All coupling between contexts is synchronous HTTP. |
+| R3-19 | deploy / tool-lib | `WebApi/docker/init.sql` has drifted from the mappings (no `MemberAccounts` or `CommunityId`, no access-request columns). A migration runner is still missing (deploy#3). There is no OTLP collector in compose. |
+| R3-20 | identity | Profile updates build a new object and upsert it (COALESCE), so fields cannot be cleared and there is no concurrency control. Avatars are stored on local disk and `userId` is used as a `Directory.GetFiles` search pattern, which allows wildcard probing. The email change is not atomic across identity and autheo. tsqr-common is referenced through a ProjectReference instead of the NuGet package. |
+
+### Low / Product
+
+| # | Finding |
+|---|---|
+| R3-21 | tool-lib `GET /api/tools` loads the whole catalogue and pages in memory. `GET /api/loans` reads InventoryItems with status 3 instead of the Loans table, and its `memberId` post-filter breaks the totals. The dashboard uses magic numbers. |
+| R3-22 | `tsqr-ui` has 3 pages, and 5 of its 6 feature cards link to `#`. `tsqr-support-ui` is a static mock-up with no HTTP calls. tool-lib `README.md`, `docs/current-work.md` and `docs/planned-work.md` are stale (they still say tests were removed and fines are hard-coded). |
+| R3-23 | Housekeeping: a stray `public class Test {}` in `tsqr-autheo/src/TSQR.Autheo.Domain/Entity.cs`; `HashToken` copied in 4 places; empty `[tool-lib` and `[tool-lib]` files in `tsqr-deploy`; `tsqr-tempalert` is unrelated to TownSquare (an embedded-C exercise that does not compile). |
+
+### Round 3 verdict and suggested order
+
+1. **Fix the core loop first (R3-1, R3-7, R3-8, R3-12).** These are small, local fixes in tool-lib, but without them a real community could not run a library: members cannot be onboarded, Specialty tools cannot be lent, and returns lock borrowers out.
+2. **Close tenant isolation (R3-2, R3-3, R3-4, R3-9).** Use one shared rule in every service: tenant from the claim, otherwise 403; filter every read and write by tenant; the tenant is immutable on the aggregate. Consider a shared `ICurrentTenant` and repository filter in `tsqr-common`.
+3. **Secrets and IAM (R3-5, R3-6, R3-11, then autheo#5).** Rotate the key, then make one system the source of truth for roles, permissions and suspension, and synchronise it through the outbox. That also gives the outbox its first real producer (R3-18).
+4. **Then the remaining open items:** soup-kitchen#7/#8, communities#7, common#2 and deploy#3.
+
+*These findings came from reading the code and should be reviewed before they are filed or acted on.*

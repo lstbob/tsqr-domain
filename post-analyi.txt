@@ -1,20 +1,154 @@
+TSQR (TownSquare): post-analysis findings
+Last updated: 2026-11-19 (full re-scan of all tsqr-* repositories)
+Companion docs: townsquare.md (what the app is), domain-driven-design.md (DDD model),
+                thegoodandthebad.md / thegoodandthebad-v2.md (audits, status, Round 3)
+
+Legend: [FIXED] shipped and confirmed in code
+        [PARTIAL] shipped, with a gap still in code
+        [OPEN] not done
+        (v) = confirmed by reading the code during this review
+
+======================================================================
+A. ORIGINAL LIST (2026-10-10): STATUS
+======================================================================
 Critical
-1. Optimistic concurrency — No row versioning anywhere; lost updates on inventory/loans/members
-2. Zero indexes — Only 2 explicit indexes across all 6 databases; FK columns, Email, Status all unindexed
-3. Blocking async call — Autheo.UserRepository.Update() calls .GetAwaiter().GetResult() on the thread pool
-4. SELECT * everywhere — Every GetById in communities, soup-kitchen, and some tool-lib queries
-High Impact
-5. 3 cross-aggregate transaction violations in tool-lib (RegisterTool, LoanTool, ReserveTool) — update >1 aggregate per tx
-6. Domain events mostly dead — 5 of 14 tool-lib events never raised; 4 handlers are empty stubs; other 5 contexts have zero events
-7. Weak contexts need domain modeling — Identity (fully anemic), Support (flat DTOs, no Ticket aggregate), Soup Kitchen (public constructors, no validation)
-8. Hard deletes everywhere — No audit trail on any table
-9. No pagination — Every list endpoint is unbounded (only Support has LIMIT 50)
+1. Optimistic concurrency ............................. [PARTIAL]
+   xmin RowVersion and a 409 response are in tool-lib, communities, soup-kitchen,
+   support and autheo. Identity has none yet.
+2. Zero indexes ........................................ [FIXED]
+   FK, query-path and partial unique indexes added in every service (schema hardening).
+3. Blocking async call in Autheo UserRepository ........ [FIXED] autheo#1
+4. SELECT * everywhere ................................. [FIXED]
+   Explicit column lists in all services.
+
+High impact
+5. Cross-aggregate transactions (RegisterTool / LoanTool / ReserveTool) ... [FIXED by design]
+   One root is saved per command. Side effects run in in-transaction event handlers
+   (eShop "Option A"), so they are still atomic across aggregates, on purpose.
+6. Domain events mostly dead ........................... [PARTIAL]
+   Tool-lib is wired: 8 events have real handlers, 6 are audit-only.
+   ReturnReminderEvent is still never raised.
+   Soup-kitchen and support raise events, but the handlers do nothing or only log.
+   Autheo and identity raise none.
+7. Weak contexts need domain modelling ................. [PARTIAL]
+   Support:      Ticket and Incident aggregates with state machines [FIXED]
+   Soup kitchen: factories and validation; Event is the aggregate root [FIXED];
+                 state guards and capacity still [OPEN] (#7, #8)
+   Identity:     UserProfile and Role behaviour [FIXED];
+                 Entity base / IAggregateRoot still [OPEN] (identity#6)
+8. Hard deletes everywhere ............................. [PARTIAL]
+   Soft deletes in communities, soup-kitchen, support and identity.
+   Tool-lib still uses hard DELETE (no endpoint exposes it).
+9. No pagination ....................................... [PARTIAL]
+   Paginated everywhere except tool-lib GET /api/tools, which pages in memory
+   after loading the whole catalogue.
+
 Medium
-10. String-concatenated SQL in Soup Kitchen query handlers
-11. Identity schema mismatch — user_profiles.Id is VARCHAR(128) vs autheo's UUID; dead AspNetUsers tables
-12. Separate DB connections for reads — bypassing UoW, wasting TCP handshakes
-13. Policy aggregate orphaned — never loaded or enforced by any handler
-14. Member.Reinstate() allows Banned→Active (contradicts stated invariant)
-15. No CI/CD — zero GitHub Actions across all repos
-16. No tests outside tool-lib (12 unit tests total)
-17. No structured logging / distributed tracing
+10. String-concatenated SQL in Soup Kitchen ............ [FIXED] soup-kitchen#2
+11. Identity schema mismatch / dead AspNetUsers ......... [FIXED] identity#2
+12. Separate DB connections for reads .................. [FIXED] communities#5
+13. Policy aggregate orphaned .......................... [PARTIAL]
+    Loan, Reserve and Renew now copy policy values in. But:
+    - location is always passed as null;
+    - the seeded Specialty policy (0 renewals) fails validation (v).
+14. Member.Reinstate allows Banned -> Active ........... [PARTIAL]
+    Reinstate is guarded, but Suspend() is allowed from Banned,
+    so Banned -> Suspended -> Active still works (v).
+15. No CI/CD ........................................... [FIXED] deploy#1 (reusable workflows, GHCR)
+16. No tests outside tool-lib .......................... [FIXED] tool-lib#40
+    About 87 tests in tool-lib; tests in every service. No Postgres integration tests yet.
+17. No structured logging / tracing .................... [PARTIAL] common#1
+    Logging and tracing are in the code: JSON logs, X-Correlation-ID, OTLP.
+    docker-compose has no collector or backend to receive the data.
+
+======================================================================
+B. NEW FINDINGS (2026-11-19 scan), in priority order
+   Full write-ups: thegoodandthebad-v2.md, section "Round 3"
+======================================================================
+Critical (broken business flow / security / tenant isolation)
+R3-1  Returning a tool never ends its Loan (v).
+      The loan stays Active and no fine is calculated. After the due date the
+      member is locked out as "overdue".
+R3-2  Soup kitchen: UpdateEvent loads any event without a tenant filter, and
+      UpdateDetails overwrites CommunityId, so one tenant can take over another
+      tenant's event (v).
+R3-3  Soup kitchen: the uncommitted community-scoping WIP does not compile
+      (GetStatsAsync(communityId, ct) is not on IDashboardQueries) (v).
+      The dashboard query is not tenant-scoped.
+R3-4  Support: GET /api/tickets is anonymous and returns SubmitterEmail.
+      CurrentUser falls back to community 1 when the claim is missing,
+      which breaks the JWT contract (v).
+R3-5  Identity: a JWT signing key is committed in
+      TSQR.Identity.Api/appsettings.json (v). Rotate it and remove it.
+R3-6  Identity suspension and soft delete are not enforced at login.
+      Autheo only checks User.IsActive (v).
+
+High
+R3-7  Tool-lib: access requests are not persisted. MemberMapping has no
+      AccessRequestStatus or Identification (v), so approve/deny fail after a reload.
+R3-8  Tool-lib: the seeded Specialty policy (MaxRenewalCount = 0) is rejected by
+      Policy validation (1-2) (v), so Specialty tools cannot be loaned or reserved.
+R3-9  Tool-lib multi-tenancy is in name only. CommunityId defaults to 1 and no
+      query filters by it.
+R3-10 Tool-lib authorization gaps:
+      - POST loans/{id}/renew has no permission and no ownership check;
+      - AdminId and OwnerId are taken from the request body;
+      - request-access is anonymous and accepts any MemberId;
+      - member PII is readable by any authenticated user.
+R3-11 Two IAM models that are not connected. Identity roles, permissions and
+      suspensions never reach token issuing; permissions come from the static
+      RolePermissions map. There is no API to grant a role other than Regular.
+R3-12 Banned -> Suspended -> Active loophole (see A.14).
+
+Medium
+R3-13 Autheo:
+      - a password reset or change does not revoke refresh tokens;
+      - RefreshTokenExpirationDays is ignored (7 days is hard-coded);
+      - no login throttling;
+      - no UseForwardedHeaders, so the per-IP limiter and the recorded IPs
+        see the gateway's address.
+R3-14 Gateway allows by default.
+      - Any route without a policy is public.
+      - Its public routes have drifted from the services: the soup-kitchen GET
+        routes and communities quick-register are public at the gateway,
+        and the services then reject them.
+      - The gateway has no rate limiting.
+R3-15 Communities:
+      - Confirm/Suspend/Archive are unguarded (communities#7);
+      - CountryCode.FromName collides ("Austria" and "Australia" both become "AU");
+      - DapperUnitOfWork retries Commit after a transient error (unsafe).
+R3-16 Soup kitchen:
+      - capacity (MaxGuests) and event status are not enforced (#7, #8);
+      - domain events have no handlers;
+      - Volunteer.MemberId is not checked against the caller.
+R3-17 Tool-lib circulation rules missing:
+      - reservation expiry is never enforced;
+      - renew ignores waiting reservations;
+      - no per-member item limit;
+      - notification events change state but notify nobody.
+R3-18 Messaging: the outbox exists, but there is no producer, the transport is
+      a logging placeholder, and there is no inbox.
+R3-19 Schema drift: tool-lib WebApi/docker/init.sql lacks MemberAccounts and
+      CommunityId columns that the mappings use. A migration runner is still
+      missing (deploy#3).
+R3-20 Identity:
+      - profile updates use create + COALESCE upsert, so fields cannot be cleared;
+      - no concurrency control;
+      - the avatar lookup uses userId as a file search pattern.
+
+Low / product
+R3-21 Tool-lib read side: GET /api/loans reads InventoryItems, not the Loans table;
+      the dashboard uses magic numbers.
+R3-22 Product surface is thin:
+      - tsqr-ui has 3 pages, and 5 of 6 feature cards link to "#";
+      - tsqr-support-ui is a static mock-up;
+      - tool-lib README, current-work.md and planned-work.md are stale.
+R3-23 Housekeeping:
+      - stray `Test` class in autheo Domain/Entity.cs;
+      - empty `[tool-lib` and `[tool-lib]` files in tsqr-deploy;
+      - tsqr-tempalert is unrelated to TownSquare.
+
+Still-open backlog issues (GitHub): common#2, deploy#3, autheo#5, communities#7,
+soup-kitchen#6/#7/#8/#22, identity#6, support#6, plus the parent epics
+tool-lib#30/#32, communities#1, soup-kitchen#1, identity#1, support#1 (sub-issues mostly
+shipped; the parents can probably be closed).

@@ -1,9 +1,65 @@
 # TSQR (TownsSquare) — DDD Design Audit: The Good & The Bad
 
+> **Status update, 2026-11-19.** This audit was written on 2026-10-10. Most of its findings have shipped since then. The table below gives the current status of each section; the original text is kept unchanged as a historical record.
+> **New sources:**
+> - Product overview: [`townsquare.md`](./townsquare.md)
+> - Current DDD model: [`domain-driven-design.md`](./domain-driven-design.md)
+> - New findings: [`thegoodandthebad-v2.md` § Round 3](./thegoodandthebad-v2.md#round-3--new-findings-2026-11-19)
+
+---
+
+## Status Update (2026-11-19)
+
+Status is based on GitHub issue state, confirmed by a fresh read of the code on `main` (plus uncommitted working-tree changes where they matter).
+✅ fixed · 🟡 partially fixed or a gap remains · ❌ open
+
+| # | Section | Status | Notes |
+|---|---|---|---|
+| 1 | Aggregate Boundary Violations | ✅ | tool-lib#33 and #47. One root is saved per command, and other aggregates change through in-transaction event handlers (still atomic across aggregates, by design). |
+| 2 | Domain Events: Defined but Dead | 🟡 | tool-lib#34 and #45. 8 events now have real handlers and 6 are audit-only. `ReturnReminderEvent` is still never raised. |
+| 3 | Inconsistent Error Handling | ✅ | autheo#1. `Result<T>` is used throughout autheo. |
+| 4 | Debug Leak | ✅ | tool-lib#31 |
+| 5 | Not-Aggregate Roots | ✅ | tool-lib#31. `MaintenanceRecord` is now a child of `InventoryItem`, and `Manufacturer` is a value object. |
+| 6 | QuickRegister Transaction | ✅ | communities#4. One unit of work covers the location and the community. |
+| 7 | Soup Kitchen Public Constructors | ✅ | soup-kitchen#4 and #5. `Event` is the single root, with validating factories. Guards and capacity are still open (soup-kitchen#7 and #8). |
+| 8 | Identity Anemic Domain | 🟡 | identity#3, #4 and #7 shipped behaviour. identity#6 (Entity base, IAggregateRoot, value objects) is open. Profile updates still bypass the aggregate (upsert). |
+| 9 | Reservation Queue Ignores Domain Service | ✅ | tool-lib#34 and #43. The direction bug is fixed and tested. |
+| 10 | Naive Slug | ✅ | communities#2. Unicode-aware, immutable, unique among active communities. |
+| 11 | Hardcoded Fine Rate | ✅ | tool-lib#35. The fee is copied from Policy at checkout. Legacy defaults remain. |
+| 12 | Policy Orphaned | 🟡 | Policy is now used. Location is always null, and the seeded **Specialty** policy (0 renewals) fails validation, so it cannot be loaded (Round 3, R3-8). |
+| 13 | Reinstate Banned → Active | 🟡 | `Reinstate` is guarded, but `Suspend()` is allowed from Banned, so Banned → Suspended → Active (R3-12). |
+| 14 | Support Has No Domain Model | ✅ | support#3 and #4. Ticket and Incident aggregates with state machines and events. Comments and attachments are open (support#6). |
+| 15 | Value Object Duplication | ❌ | common#2 is open. Typed IDs and base classes are still copied per service. |
+| 16 | No `INoSqlRepository` | ✅ | tool-lib#36 |
+| 17 | Persistence Folder Structure | ✅ | tool-lib#36 |
+| 18 | No Pure Persistence Abstraction | ✅ | tool-lib#36 |
+| 19 | SELECT *, Constraints, Indexes | ✅ | Schema hardening in every service: explicit columns, enum `CHECK`s, FK and query indexes. |
+| 20 | Identity Schema Duplication | ✅ | identity#2 |
+| 21 | No Pagination | 🟡 | Paginated everywhere except tool-lib `GET /api/tools`, which pages in memory. |
+| 22 | String-Concatenated WHERE | ✅ | soup-kitchen#2 |
+| 23 | No Optimistic Concurrency | 🟡 | `xmin` RowVersion and 409 in tool-lib, communities, soup-kitchen, support and autheo. **Identity has none.** |
+| 24 | Ignored Affected Rows | ✅ | tool-lib#38 (and the same in other services) |
+| 25 | Hard Deletes | 🟡 | Soft deletes in communities, soup-kitchen, support and identity. Tool-lib still deletes hard (no endpoint exposes it). |
+| 26 | Connections Bypassing UoW | ✅ | communities#5 |
+| 27 | Unnecessary TCP Connections | ✅ | communities#5 |
+| 28 | Blocking Async in Autheo | ✅ | autheo#1 |
+| — | CI/CD (deploy#1) | ✅ | Reusable `dotnet-ci.yml` and `node-ci.yml`, images published to GHCR |
+| — | Test infrastructure (tool-lib#40) | ✅ | Tests in every service (about 87 in tool-lib). No Postgres integration tests yet. |
+| — | Logging and tracing (common#1) | 🟡 | Correlation IDs, JSON logs and OTLP are in the code. No collector or backend in docker-compose. |
+| — | Schema hardening (tool-lib#41) | ✅ | |
+
+**Score:** 23 ✅ · 8 🟡 · 1 ❌ across 32 items.
+
+**Corrections to "The Good" below:**
+- **§6:** the `mbr` claim was **retired** (autheo#6). Users and members are now linked by `sub` and the tool-lib `MemberAccounts` mapping. See `tsqr-autheo/docs/JWT-CONTRACT.md`.
+- **§8:** a `community_id` claim now carries the tenant. Support and soup-kitchen filter by it; tool-lib still does not (R3-9).
+- **§7:** RS256 signing, per-service audience and rate limiting are still open (autheo#5).
+
 ---
 
 ## Table of Contents
 
+0. [Status Update (2026-11-19)](#status-update-2026-11-19)
 1. [The Bad: Design Issues](#the-bad-design-issues)
    - [1. Aggregate Boundary Violations](#1-aggregate-boundary-violations)
    - [2. Domain Events: Defined but Dead](#2-domain-events-defined-but-dead)
@@ -889,6 +945,20 @@ The **32 issues identified** fall into four categories:
 - **Infrastructure (4):** No CI/CD pipeline, zero test coverage outside tool-lib, no structured logging/tracing, schema hardening gaps
 
 The foundation is solid but incomplete. The Tool Library bounded context shows what the architecture is capable of; the other contexts need to be brought up to the same standard.
+
+### Verdict update (2026-11-19)
+
+Those other contexts have largely been brought up to standard:
+- Support, Soup Kitchen and Identity now have real aggregates.
+- Every service has concurrency control, schema hardening, pagination, tests, CI and permission-based authorisation.
+
+The remaining risk has moved from **structure** to **behaviour and boundaries**:
+- the loan lifecycle does not close on return;
+- tenant isolation is incomplete in tool-lib, soup-kitchen and support;
+- the two IAM models are not connected;
+- a few seeds and mappings have drifted from the domain rules.
+
+See [Round 3](./thegoodandthebad-v2.md#round-3--new-findings-2026-11-19).
 
 ## Missing Tickets
 
