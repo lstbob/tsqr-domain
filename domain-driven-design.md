@@ -26,6 +26,7 @@
 | **Authentication and credentials** | **Generic** | Could be bought (Keycloak, Entra ID and so on). | Autheo (`tsqr-autheo`) |
 | **User profile and administration** (profiles, suspension, roles, permissions) | **Generic / supporting** | Standard IAM administration. | Identity (`tsqr-identity`) |
 | **Customer support and service status** | **Generic** | Standard help-desk functionality. | Support (`tsqr-support`) |
+| **Learning** (spaced retrieval, recall practice, calibration) | **Supporting** | Helps members learn and remember what they practise. The rules are small: cards, Leitner boxes and due dates. | Learning (`tsqr-learning`) |
 
 Most of the modelling effort has gone, correctly, into the core subdomain.
 
@@ -72,6 +73,11 @@ Most of the modelling effort has gone, correctly, into the core subdomain.
  │ Incident     │
  └──────────────┘
 
+ ┌──────────────┐
+ │  LEARNING    │  Deck, Card, Review
+ │ (supporting) │  conformist to Autheo's JWT
+ └──────────────┘
+
  GATEWAY (YARP): edge proxy and BFF aggregator; no domain logic.
 ```
 
@@ -81,6 +87,7 @@ Most of the modelling effort has gone, correctly, into the core subdomain.
 |---|---|---|
 | Autheo → all contexts | **Open Host Service + Published Language** | Signed JWT. The contract is in `tsqr-autheo/docs/JWT-CONTRACT.md` and covered by a contract test. |
 | All contexts ← Autheo | **Conformist** | Downstream contexts take `sub`, `role` and `permission` claims as given, and authorise against the shared permission catalogue. |
+| Autheo → Learning | **Conformist** | Learning takes the `sub` and `community_id` claims as given. Learning has no other dependency on another context. |
 | Tool Library → Autheo | **Customer/Supplier** (Tool Library is the supplier) | `GET /internal/members/community?subject=` with an `X-Internal-Api-Key` header. Autheo uses it to put `community_id` into the token. Tool Library is the **source of truth for community membership**. |
 | Autheo ← Identity | **Customer/Supplier** (Autheo is the supplier) | Identity runs the email-change confirmation, then calls Autheo's internal `change-email`. Autheo owns credentials and email. |
 | Communities → others | **Separate Ways (implicit reference)** | `CommunityId` appears in every tenant-scoped aggregate as an opaque `int`, but nothing checks it against Communities at runtime. |
@@ -380,6 +387,7 @@ Roles map to these permissions (see `townsquare.md` §3.4). Services check **per
 | **Autheo** | User · Subject (`sub`) · Credential · Access token · Refresh token · Rotation · Reuse detection · Revoke · Password reset token · Community claim |
 | **Identity** | User profile · Suspension (lockout end, reason, locked by) · Reinstate · Role · Permission · Pending email change |
 | **Support** | Ticket · Category · Priority · Assign · Resolve · Reopen · Close · Incident · Escalate · Findings · Service status |
+| **Learning** | Deck · Card · Cue · Expected answer · Box · Due · Review · Lapse · Confidence · Practice queue · Calibration |
 | **Shared** | Community (tenant) · Permission · Domain event · Integration event · Outbox · Correlation ID |
 
 **Words that mean different things in different contexts:**
@@ -403,3 +411,62 @@ Roles map to these permissions (see `townsquare.md` §3.4). Services check **per
 6. **Unify IAM.** Either Autheo issues claims from Identity's roles, permissions and suspension state (fed by integration events), or Identity becomes the role authority and Autheo queries it. Today there are two sources of truth.
 7. **Decide who owns membership.** Communities defines the tenant while the Tool Library owns "who belongs". As the soup kitchen and other mutual-aid features grow, consider a **Membership** context, or move membership into Communities, so that soup-kitchen volunteers and tool-library members are the same verified neighbours.
 8. **Finish the shared kernel** (`Entity`, `AggregateRoot`, `ValueObject` and the UoW contract in `tsqr-common`) so the building blocks above stop being copied between services.
+
+---
+
+## 13. Learning context (supporting)
+
+The Learning context helps a learner remember what they study. It applies three keystone strategies from *Make It Stick*: retrieval practice, spaced retrieval and interleaving. It also records a confidence rating for calibration.
+
+### 13.1 Aggregates
+
+An aggregate root (AR) is the entity that one command loads and saves.
+
+```
+Deck (AR) ──────── a named set of cards, owned by one learner in one community
+  • Name, owner (`sub`), community (`community_id`)
+
+Card (AR) ──────── one prompt and its Leitner state
+  • Cue, ExpectedAnswer
+  • Box (LeitnerBox, 1 to 5), DueAt, ReviewCount, LapseCount
+  └─ Review (insert-only row, one for each review of the card)
+```
+
+**Why Card is a separate aggregate root.** Each review changes the schedule and the counts of one card. Keeping the card separate from its deck keeps each command small. The deck does not change when a card is reviewed.
+
+### 13.2 Value objects
+
+- `LeitnerBox`: a box number from 1 to 5. A correct answer moves it up one box. A wrong answer moves it to box 1. The Leitner system is a flashcard system for spaced retrieval that the book describes.
+- `Confidence`: one of Low, Medium or High. The learner gives it with each review.
+
+### 13.3 Invariants
+
+1. A correct answer moves the card up one box. The maximum is box 5.
+2. A wrong answer moves the card to box 1 and adds one lapse.
+3. The next review is due 1, 2, 4, 8 or 16 days later, for box 1 to 5. This is a design decision. The book does not give these intervals.
+4. A card cannot be reviewed before `DueAt`.
+5. A review needs a non-empty typed answer. The learner types the answer before the reveal.
+6. The practice queue never returns `ExpectedAnswer`. The reveal returns it only after a typed attempt.
+7. Every read and write filters by `community_id` and `sub`. A learner sees only their own decks and cards.
+8. Each review adds one Review row. A Review row never changes.
+
+### 13.4 Domain events
+
+- `DeckCreatedDomainEvent`: a deck is created.
+- `CardCreatedDomainEvent`: a card is created.
+- `CardReviewedDomainEvent`: a card is reviewed.
+
+No integration event is published in this version.
+
+### 13.5 Not modelled yet
+
+- Reflection, elaboration prompts, mnemonics and pretests.
+- A separate Scheduling context. Card holds the prompt and its schedule together. Splitting them is a follow-up.
+
+### 13.6 Sources
+
+- Brown, P. C., Roediger, H. L. III and McDaniel, M. A. (2014). *Make It Stick: The Science of Successful Learning*. Belknap Press of Harvard University Press.
+- Chapter titles and page numbers: https://www.degruyterbrill.com/document/doi/10.4159/9780674419377-toc/html
+- Keystone strategies, pages 201 to 207 (chapter 8): https://cirl.etoncollege.com/?p=1136
+- Calibration: chapter 5, "Avoid Illusions of Knowing".
+- Not from the book: the Leitner interval numbers (1, 2, 4, 8 and 16 days) and the domain-driven design in this section.

@@ -15,13 +15,14 @@
 
 **TownSquare is a digital toolkit for neighbourhoods.** It lets a local community share physical resources and organise mutual aid without each group having to build its own tools.
 
-The platform has three parts:
+The platform has four parts:
 
 | Part | What it does for a community |
 |---|---|
 | **Tool Library** ("Library of Things") | Neighbours put tools into a shared pool. Verified members reserve, borrow, renew and return them. Broken tools go to repair. Fair-use rules keep sharing fair. |
 | **Soup Kitchen** | Volunteer-run community kitchens plan meal events, list the meals needed, register guests, schedule volunteers and record donations. |
 | **Community Hub** | Every community gets a place on a real-world map (Country → City → Neighbourhood → Community), so it can be found, registered and confirmed. |
+| **Learning** (`tsqr-learning`) | Members practise what they learn. Due cards are mixed across decks and reviewed on a spaced schedule. Each answer records a confidence rating, so members can see how well their confidence matches their results. |
 
 Two supporting parts sit under these: a single **sign-in and identity** service shared by all features, and a **Support Portal** where users report problems and check service status.
 
